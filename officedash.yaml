@@ -1,5 +1,5 @@
-# Office Dashboard for ESP32-P4
-# Based on workingcode.yaml - Simplified and ready for customization
+# Office Dashboard for ESP32-P4 (Portrait 480x800)
+# Based on DisplayEntry theme and layout
 # ESPHome 2025.12.3
 
 esphome:
@@ -8,9 +8,22 @@ esphome:
 
 # ========== SUBSTITUTIONS ==========
 substitutions:
-  # Climate settings - CHANGE THESE to your climate entity
-  climate_entity: "climate.your_ac_unit"  # CHANGE THIS to your climate entity
-  climate_entity_name: "Air Conditioner"  # Display name
+  # Weather entities (matching DisplayEntry setup)
+  weather_entity: "weather.pirateweather"
+  temperature_entity: "sensor.pirateweather_temperature"
+  humidity_entity: "sensor.pirateweather_humidity"
+
+  # Timezone
+  timezone: "America/Chicago"
+
+  # Icons (using Material Design Icons)
+  lock_variant_icon: "\U000F0341"
+  brightness_icon: "\U000F1A4D"
+  home_icon: "\U000F06A1"
+  weather_icon: "\U000F18F6"
+  ceiling_lights_icon: "\U000F18DD"
+  humidity_icon: "\U0000e938"
+  temperature_icon: "\U0000e939"
 
 # ========== ESP32-P4 CONFIGURATION ==========
 esp32:
@@ -67,9 +80,11 @@ esp_ldo:
 time:
   - platform: homeassistant
     id: homeassistant_time
+    timezone: "${timezone}"
 
   - platform: sntp
     id: sntp_time
+    timezone: "${timezone}"
     servers:
       - pool.ntp.org
       - time.google.com
@@ -81,26 +96,12 @@ sensor:
     name: "WiFi Signal Strength"
     id: wifi_signal_db
     update_interval: 30s
-    unit_of_measurement: "dBm"
-    on_value:
-      then:
-        - lambda: |-
-            char signal_str[30];
-            snprintf(signal_str, sizeof(signal_str), "WiFi: %.0f dBm", x);
-            lv_label_set_text(id(wifi_signal_label), signal_str);
 
   # ESP32-P4 Internal Temperature
   - platform: internal_temperature
     name: "ESP32-P4 Temperature"
     id: esp32_temperature
     update_interval: 30s
-    unit_of_measurement: "°C"
-    on_value:
-      then:
-        - lambda: |-
-            char temp_str[30];
-            snprintf(temp_str, sizeof(temp_str), "CPU: %.1f°C", x);
-            lv_label_set_text(id(chip_temp_label), temp_str);
 
   # System Uptime
   - platform: uptime
@@ -108,17 +109,29 @@ sensor:
     id: uptime_sensor
     update_interval: 60s
 
-  # SRAM Usage Monitor
-  - platform: template
-    name: "SRAM Usage"
-    id: sram_usage
-    unit_of_measurement: "KB"
-    update_interval: 10s
-    lambda: |-
-      const size_t total_sram = 512 * 1024;
-      size_t free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-      size_t used_sram = total_sram - free_sram;
-      return used_sram / 1024.0;
+  # Home temperature sensor
+  - platform: homeassistant
+    id: home_temperature_sensor
+    entity_id: "${temperature_entity}"
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: circle_home_widget_temp_value
+            text:
+              format: "%.1f°"
+              args: [id(home_temperature_sensor).state]
+
+  # Home humidity sensor
+  - platform: homeassistant
+    id: home_humidity_sensor
+    entity_id: "${humidity_entity}"
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: circle_home_widget_hum_value
+            text:
+              format: "%.0f%%"
+              args: [id(home_humidity_sensor).state]
 
 # ========== TEXT SENSORS ==========
 text_sensor:
@@ -127,11 +140,6 @@ text_sensor:
     ip_address:
       name: "IP Address"
       id: wifi_ip_address
-      on_value:
-        then:
-          - lambda: |-
-              std::string ip_text = "IP: " + x;
-              lv_label_set_text(id(ip_label), ip_text.c_str());
 
 # ========== I2C BUS (for touchscreen) ==========
 i2c:
@@ -156,7 +164,7 @@ touchscreen:
       mirror_y: false
     on_touch:
       then:
-        - light.turn_on: backlight
+        - light.turn_on: display_backlight
 
 # ========== BACKLIGHT ==========
 output:
@@ -169,7 +177,7 @@ light:
   - platform: monochromatic
     output: backlight_pwm
     name: "Display Backlight"
-    id: backlight
+    id: display_backlight
     restore_mode: ALWAYS_ON
     default_transition_length: 250ms
 
@@ -179,7 +187,7 @@ display:
     id: main_display
     model: JC4880P443
     reset_pin: GPIO5
-    rotation: 270
+    rotation: 0
     dimensions:
       width: 480
       height: 800
@@ -187,34 +195,65 @@ display:
     pclk_frequency: 10MHz
 
 # ========== FONTS ==========
-# Using Nunito SemiBold to match DisplayEntry theme
 font:
-  - file: "gfonts://Nunito@600"  # SemiBold weight
+  # Nunito text fonts
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_16
     size: 16
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_18
     size: 18
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_20
     size: 20
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_24
     size: 24
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_30
     size: 30
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_36
     size: 36
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_48
     size: 48
-  - file: "gfonts://Nunito@600"
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
+
+  - file: "assets/fonts/Nunito-SemiBold.ttf"
     id: nunito_64
     size: 64
+    bpp: 4
+    glyphsets:
+      - GF_Latin_Core
 
-  # Icon fonts from DisplayEntry
+  # Icon fonts
   - file: "assets/fonts/icons_v2.ttf"
     id: icons_28
     size: 28
@@ -222,9 +261,11 @@ font:
     glyphs: [
       "\U0000e92e", # lock
       "\U0000e908", # lightbulb
+      "\U0000e938", # humidity
+      "\U0000e939", # temperature
     ]
 
-  - file: "asset/fonts/materialdesignicons-webfont.ttf"
+  - file: "assets/fonts/materialdesignicons-webfont.ttf"
     id: mdi_icons_28
     size: 28
     bpp: 4
@@ -235,6 +276,59 @@ font:
       "\U000F18F6", # weather
       "\U000F18DD", # ceiling lights
     ]
+
+# ========== IMAGES ==========
+image:
+  # Weather condition images
+  - file: "assets/images/weather-clear-night.png"
+    id: weather_clear_night
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-cloudy.png"
+    id: weather_cloudy
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-fog.png"
+    id: weather_fog
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-lightning.png"
+    id: weather_lightning
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-night-partly-cloudy.png"
+    id: weather_night_partly_cloudy
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-partly-cloudy.png"
+    id: weather_partly_cloudy
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-pouring.png"
+    id: weather_pouring
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-rainy.png"
+    id: weather_rainy
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-snowy.png"
+    id: weather_snowy
+    resize: 100x100
+    type: RGB565
+
+  - file: "assets/images/weather-sunny.png"
+    id: weather_sunny
+    resize: 100x100
+    type: RGB565
 
 # ========== COLORS ==========
 # Exact color palette from DisplayEntry theme
@@ -276,46 +370,18 @@ lvgl:
   color_depth: 16
   byte_order: little_endian
 
-  on_idle:
-    timeout: 30000s
-    then:
-      - lambda: |-
-          ESP_LOGI("screen", "Screen idle");
-
   pages:
     # ========== HOME PAGE ==========
     - id: home_page
       bg_color: color_black
       scrollable: false
       widgets:
-        # Header indicators (no icons as per todo #5)
-        - obj:
-            id: home_bg_indicators
-            y: 10
-            width: 760
-            height: 40
-            align: TOP_MID
-            pad_all: 0
-            bg_color: color_steel_blue
-            bg_opa: TRANSP
-            border_opa: TRANSP
-            border_width: 0
-            shadow_opa: TRANSP
-            widgets:
-              # Title on left
-              - label:
-                  align: LEFT_MID
-                  x: 20
-                  text: "OFFICE DASHBOARD"
-                  text_color: color_misty_blue
-                  text_font: nunito_20
-
-        # ========== TOP CARD: Weather/Time/Date ==========
+        # TOP CARD: Time/Date/Info
         - obj:
             id: main_widget_background
-            y: 60
-            width: 760
-            height: 280
+            y: 10
+            width: 460
+            height: 240
             align: TOP_MID
             clickable: false
             scrollable: false
@@ -323,101 +389,87 @@ lvgl:
             pad_all: 0
             bg_color: color_slate_blue_gray
             border_opa: TRANSP
-            border_width: 0
             shadow_opa: TRANSP
             widgets:
-              # WiFi & System info at top
-              - obj:
-                  id: info_section
-                  width: 760
-                  height: 80
+              # Time Display
+              - label:
+                  id: time_label
+                  x: 0
+                  y: 20
                   align: TOP_MID
-                  clickable: false
-                  radius: 20
-                  pad_all: 0
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  border_width: 0
-                  shadow_opa: TRANSP
-                  widgets:
-                    - label:
-                        id: wifi_signal_label
-                        x: 30
-                        y: 15
-                        text: "WiFi: - dBm"
-                        text_color: color_green
-                        text_font: nunito_18
-                    - label:
-                        id: ip_label
-                        x: 30
-                        y: 40
-                        text: "IP: ..."
-                        text_color: color_blue
-                        text_font: nunito_16
-                    - label:
-                        id: chip_temp_label
-                        x: -30
-                        y: 15
-                        align: TOP_RIGHT
-                        text: "CPU: --.-°C"
-                        text_color: color_orange
-                        text_font: nunito_18
-                    - label:
-                        id: sram_label
-                        x: -30
-                        y: 40
-                        align: TOP_RIGHT
-                        text: "RAM: 0 KB"
-                        text_color: color_yellow
-                        text_font: nunito_16
+                  text_font: nunito_64
+                  text_color: color_misty_blue
+                  text: "12:00"
 
-                    # Divider Line
-                    - obj:
-                        y: -5
-                        width: 720
-                        height: 2
-                        align: BOTTOM_MID
-                        bg_color: color_misty_blue
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-
-              # Time/Date section
-              - obj:
-                  id: datetime_widget
-                  y: 80
-                  width: 760
-                  height: 200
+              - label:
+                  id: time_period
+                  x: 0
+                  y: 90
                   align: TOP_MID
-                  clickable: false
-                  radius: 20
-                  pad_all: 0
-                  bg_opa: TRANSP
+                  text_font: nunito_24
+                  text_color: color_steel_blue
+                  text: "PM"
+
+              # Date Display
+              - label:
+                  id: date_label
+                  y: 125
+                  align: TOP_MID
+                  text_font: nunito_18
+                  text_color: color_misty_blue
+                  text: "Friday, Jan 03"
+
+              # Kathmandu Time
+              - label:
+                  id: kathmandu_time_label
+                  y: 150
+                  align: TOP_MID
+                  text_font: nunito_16
+                  text_color: color_steel_blue
+                  text: "Kathmandu: 11:45 PM"
+
+              # Divider Line
+              - obj:
+                  y: 175
+                  width: 420
+                  height: 2
+                  align: TOP_MID
+                  bg_color: color_misty_blue
                   border_opa: TRANSP
-                  border_width: 0
                   shadow_opa: TRANSP
-                  widgets:
-                    - label:
-                        id: time_label
-                        y: 30
-                        align: TOP_MID
-                        text_font: nunito_64
-                        text_color: color_misty_blue
-                        text: "--:--"
 
-                    - label:
-                        id: date_label
-                        y: 120
-                        align: TOP_MID
-                        text_font: nunito_16
-                        text_color: color_misty_blue
-                        text: "Loading..."
+              # WiFi & System info
+              - label:
+                  id: wifi_signal_label
+                  x: 30
+                  y: 190
+                  text: "WiFi: -50 dBm"
+                  text_color: color_green
+                  text_font: nunito_16
 
-        # ========== MIDDLE CARD: Controls ==========
+              - label:
+                  id: ip_label
+                  x: 30
+                  y: 215
+                  text: "IP: 192.168.1.100"
+                  text_color: color_blue
+                  text_font: nunito_16
+
+              - label:
+                  id: chip_temp_label
+                  x: -30
+                  y: 190
+                  align: TOP_RIGHT
+                  text: "CPU: 45.0°C"
+                  text_color: color_orange
+                  text_font: nunito_16
+
+        # MIDDLE CARD: Home Controls with Neomorphic Light Button
         - obj:
-            id: middle_widget_background
-            y: 350
-            width: 760
-            height: 100
+            id: middle_home_controls
+            y: 260
+            width: 460
+            height: 180
             align: TOP_MID
             clickable: false
             scrollable: false
@@ -425,13 +477,12 @@ lvgl:
             pad_all: 0
             bg_color: color_slate_blue_gray
             border_opa: TRANSP
-            border_width: 0
             shadow_opa: TRANSP
             widgets:
               # Light control button (left side) - Neomorphic style
               - obj:
                   id: home_lights_btn_bg
-                  x: 30
+                  x: 40
                   width: 90
                   height: 90
                   align: LEFT_MID
@@ -450,7 +501,6 @@ lvgl:
                         pad_all: 0
                         bg_opa: TRANSP
                         border_opa: TRANSP
-                        border_width: 0
                         shadow_width: 8
                         shadow_spread: 2
                         shadow_ofs_y: 0
@@ -459,9 +509,6 @@ lvgl:
                         pressed:
                           bg_color: color_steel_blue
                           shadow_width: 4
-                        on_click:
-                          - lambda: |-
-                              lv_label_set_text(id(status_label), "Lights");
 
                     # Highlight shadow
                     - obj:
@@ -492,14 +539,23 @@ lvgl:
                         widgets:
                           - label:
                               align: CENTER
-                              text: "\U000F18DD"
+                              text: "${ceiling_lights_icon}"
                               text_color: color_misty_blue
                               text_font: mdi_icons_28
 
-        # CIRCLE Widget (overlays middle card)
+              # Weather placeholder on right
+              - label:
+                  x: -40
+                  y: 0
+                  align: RIGHT_MID
+                  text: "Weather"
+                  text_color: color_misty_blue
+                  text_font: nunito_20
+
+        # CIRCLE Widget with Temp/Humidity Arcs
         - obj:
             id: circle_widget_background
-            y: 260
+            y: 360
             width: 150
             height: 150
             align: CENTER
@@ -508,7 +564,6 @@ lvgl:
             pad_all: 0
             bg_color: color_black
             border_opa: TRANSP
-            border_width: 0
             shadow_opa: TRANSP
             widgets:
               - obj:
@@ -520,26 +575,79 @@ lvgl:
                   radius: 50
                   border_opa: TRANSP
                   bg_color: color_slate_blue_gray
-                  widgets:
-                    - label:
-                        align: CENTER
-                        text: "OFFICE"
-                        text_color: color_misty_blue
-                        text_font: nunito_20
 
-        # ========== BOTTOM CARD: Navigation Buttons ==========
+              - obj:
+                  id: circle_home_widget
+                  width: 150
+                  height: 150
+                  align: CENTER
+                  clickable: false
+                  radius: 75
+                  pad_all: 0
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets:
+                    # Temperature arc
+                    - arc:
+                        id: circle_home_widget_temp_arc
+                        clickable: false
+                        adjustable: false
+                        align: CENTER
+                        width: 130
+                        height: 130
+                        start_angle: 180
+                        end_angle: 360
+                        arc_width: 5
+                        arc_color: color_orange
+                        arc_rounded: false
+                        value: 50
+
+                    # Humidity arc
+                    - arc:
+                        id: circle_home_widget_hum_arc
+                        clickable: false
+                        adjustable: false
+                        align: CENTER
+                        width: 140
+                        height: 140
+                        start_angle: 0
+                        end_angle: 180
+                        arc_width: 5
+                        arc_color: color_blue
+                        arc_rounded: false
+                        value: 50
+
+                    # Temperature value
+                    - label:
+                        id: circle_home_widget_temp_value
+                        y: -10
+                        align: CENTER
+                        text_font: nunito_24
+                        text_color: color_misty_blue
+                        text: "22.5°"
+
+                    # Humidity value
+                    - label:
+                        id: circle_home_widget_hum_value
+                        y: 15
+                        align: CENTER
+                        text_font: nunito_16
+                        text_color: color_misty_blue
+                        text: "45%"
+
+        # BOTTOM CARD: Navigation Buttons
         - obj:
             id: menu_controls_background
             x: 0
             y: -20
-            width: 760
+            width: 460
             height: 60
             pad_all: 0
             align: BOTTOM_MID
             bg_color: color_slate_blue_gray
             shadow_opa: TRANSP
             border_opa: TRANSP
-            border_width: 0
             radius: 20
             widgets:
               # Lock button
@@ -558,10 +666,7 @@ lvgl:
                         align: CENTER
                         text_color: color_misty_blue
                         text_font: mdi_icons_28
-                        text: "\U000F0341"
-                  on_click:
-                    - lambda: |-
-                        lv_label_set_text(id(status_label), "Lock");
+                        text: "${lock_variant_icon}"
 
               # Brightness button
               - button:
@@ -578,10 +683,9 @@ lvgl:
                         align: CENTER
                         text_color: color_misty_blue
                         text_font: mdi_icons_28
-                        text: "\U000F1A4D"
+                        text: "${brightness_icon}"
                   on_click:
-                    - lambda: |-
-                        lv_label_set_text(id(status_label), "Brightness");
+                    - light.toggle: display_backlight
 
               # Home button
               - button:
@@ -598,18 +702,7 @@ lvgl:
                         align: CENTER
                         text_color: color_misty_blue
                         text_font: mdi_icons_28
-                        text: "\U000F06A1"
-                  on_click:
-                    - lambda: |-
-                        lv_label_set_text(id(status_label), "Home");
-
-              # Status label in center (empty text)
-              - label:
-                  id: status_label
-                  align: CENTER
-                  text: ""
-                  text_color: color_misty_blue
-                  text_font: nunito_16
+                        text: "${home_icon}"
 
               # Weather button
               - button:
@@ -626,35 +719,27 @@ lvgl:
                         align: CENTER
                         text_color: color_misty_blue
                         text_font: mdi_icons_28
-                        text: "\U000F18F6"
-                  on_click:
-                    - lambda: |-
-                        lv_label_set_text(id(status_label), "Weather");
+                        text: "${weather_icon}"
 
 # ========== UPDATE INTERVALS ==========
 interval:
-  # Update SRAM and Uptime every 5 seconds
-  - interval: 5s
-    then:
-      # Update SRAM label
-      - lambda: |-
-          float used = id(sram_usage).state;
-          static char sram_text[30];
-          snprintf(sram_text, sizeof(sram_text), "RAM: %.0f KB", used);
-          lv_label_set_text(id(sram_label), sram_text);
-
   # Update Time and Date every 1 second
   - interval: 1s
     then:
       - lambda: |-
           auto time = id(homeassistant_time).now();
           if (time.is_valid()) {
-            // Time in HH:MM format
+            // Local time in 12-hour AM/PM format
+            int hour_12 = time.hour % 12;
+            if (hour_12 == 0) hour_12 = 12;
             char time_str[10];
-            snprintf(time_str, sizeof(time_str), "%02d:%02d", time.hour, time.minute);
+            snprintf(time_str, sizeof(time_str), "%d:%02d", hour_12, time.minute);
             lv_label_set_text(id(time_label), time_str);
 
-            // Date: "Monday, Jan 03"
+            // AM/PM
+            lv_label_set_text(id(time_period), time.hour < 12 ? "AM" : "PM");
+
+            // Date: "Friday, Jan 03"
             const char* days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
             const char* months[] = {"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
             char date_str[64];
@@ -663,10 +748,40 @@ interval:
                      months[time.month],
                      time.day_of_month);
             lv_label_set_text(id(date_label), date_str);
+
+            // Kathmandu time (UTC+5:45, +11:15 from Chicago UTC-6)
+            int kathmandu_hour = (time.hour + 11) % 24;
+            int kathmandu_minute = (time.minute + 45) % 60;
+            if (time.minute + 45 >= 60) kathmandu_hour = (kathmandu_hour + 1) % 24;
+
+            int ktm_hour_12 = kathmandu_hour % 12;
+            if (ktm_hour_12 == 0) ktm_hour_12 = 12;
+            char ktm_str[64];
+            snprintf(ktm_str, sizeof(ktm_str), "Kathmandu: %d:%02d %s",
+                     ktm_hour_12, kathmandu_minute,
+                     kathmandu_hour < 12 ? "AM" : "PM");
+            lv_label_set_text(id(kathmandu_time_label), ktm_str);
           }
 
-  # System status log every 60 seconds
-  - interval: 60s
+  # Update WiFi and temperature
+  - interval: 5s
     then:
       - lambda: |-
-          ESP_LOGI("status", "System running");
+          // WiFi signal
+          if (!isnan(id(wifi_signal_db).state)) {
+            char signal_str[30];
+            snprintf(signal_str, sizeof(signal_str), "WiFi: %.0f dBm", id(wifi_signal_db).state);
+            lv_label_set_text(id(wifi_signal_label), signal_str);
+          }
+
+          // IP address
+          std::string ip = id(wifi_ip_address).state;
+          std::string ip_text = "IP: " + ip;
+          lv_label_set_text(id(ip_label), ip_text.c_str());
+
+          // CPU temperature
+          if (!isnan(id(esp32_temperature).state)) {
+            char temp_str[30];
+            snprintf(temp_str, sizeof(temp_str), "CPU: %.1f°C", id(esp32_temperature).state);
+            lv_label_set_text(id(chip_temp_label), temp_str);
+          }
